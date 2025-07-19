@@ -24,23 +24,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// import { Uploader } from "uploader";
-// import { UploadButton } from "react-uploader";
-
 import { useState, useEffect, useRef } from "react";
 import OrderList from "@/components/ui/orderlist";
 import Loading from "@/components/ui/loading";
 import Uploader from "@/components/ui/uploader";
 import ClipBlock from "@/components/ui/clipblock";
 
+import { orderFilesByPosition } from "@/lib/utils";
+import axios from "axios";
+
 const options = { multi: true, mimeTypes: ["video/mp4"] };
 
 interface vid {
   id: string;
   url: string;
+  file: File;
   name: string;
   position: number;
 }
+
+// interface audio {}
 
 export default function Trailer() {
   const loadingStates = {
@@ -75,6 +78,9 @@ export default function Trailer() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [parentWidth, setParentWidth] = useState(0);
 
+  //   const [audioFiles, setAudioFiles] = useState<audio[]>([]);
+  //   const [videoFiles, setVideoFiles] = useState<video[]>([]);
+
   useEffect(() => {
     if (parentRef.current) {
       const rect = parentRef.current.getBoundingClientRect();
@@ -94,6 +100,37 @@ export default function Trailer() {
 
     return () => resizeObserver.disconnect();
   }, []);
+
+  const sendUploadedVideos = async () => {
+    // sort for each
+    const filesToOrder = uploadedFiles.map((item) => ({
+      file: item.file,
+      position: item.position,
+    }));
+
+    const sortedFiles = orderFilesByPosition(filesToOrder);
+    const formData = new FormData();
+    sortedFiles.forEach((file) => {
+      formData.append("video_files", file);
+    });
+
+    try {
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/upload`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      console.log("Testing");
+      console.log(res.data.message);
+    } catch (err) {
+      console.error("Axios POST error:", err);
+      console.log("Error sending POST");
+    }
+  };
 
   return (
     <div className="font-sans bg-slate-950 text-white min-h-screen p-8 sm:p-20 grid grid-rows-[auto_1fr_auto] gap-16">
@@ -228,6 +265,7 @@ export default function Trailer() {
                       onClick={() => {
                         setUploadLoading(loadingStates.LOADING); // actual value
                         setUploadLoading(loadingStates.DONE); // temporary
+                        sendUploadedVideos();
                       }}
                     >
                       Submit
@@ -248,6 +286,7 @@ export default function Trailer() {
                 <div className=" flex flex-col justify-between h-fit">
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     {/* Repeat this for as many audio clips there are */}
+
                     <div className="relative w-full h-16 flex flex-col gap-y-4">
                       {/* add blocks here in a vertical col format */}
                       <ClipBlock

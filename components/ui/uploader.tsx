@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 interface Vid {
   id: string;
   url: string;
+  file: File;
   name: string;
   position: number;
 }
@@ -22,7 +23,8 @@ export default function Uploader({ onComplete }: UploadButtonProps) {
     if (files) {
       const vids: Vid[] = Array.from(files).map((file, index) => ({
         id: index.toString(),
-        url: URL.createObjectURL(file), // Use local blob URL
+        url: URL.createObjectURL(file), // For preview
+        file: file,
         name: file.name || `clip_${index}`,
         position: index,
       }));

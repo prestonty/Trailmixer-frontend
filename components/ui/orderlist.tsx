@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 interface vid {
   id: string;
   url: string;
+  file: File;
   name: string;
   position: number;
 }
