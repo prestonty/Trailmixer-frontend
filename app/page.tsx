@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 
 export default function Home() {
@@ -21,13 +22,14 @@ export default function Home() {
         "Our software will match the proper background music, sound effects, and stitch together video clips to impress your audience.",
     },
     {
-      title: "Fast & Intuitive Editing",
+      title: "Fast & Automated",
       description:
-        "Upload video clips showcasing your event and we will create all the promotional content for you.",
+        "Upload video clips showcasing your event and we will create all the promotional content for you. Perhaps Hackthe6ix needs a promotional recap video to summarize their successful event...",
     },
     {
-      title: "Export in HD",
-      description: "Share your creations in high definition audio and video!",
+      title: "Built-in Video Editor",
+      description:
+        "Drag around audio clips, add sound effects, and switch out background music all at your control.",
     },
   ];
   return (
@@ -52,7 +54,16 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         >
-          <h1 className="text-6xl font-bold mb-2">TrailMixer</h1>
+          <div className="flex gap-x-4 justify-center items-center">
+            <Image
+              src="/landing/trailmixer-logo-small.png"
+              width={100}
+              height={100}
+              alt="logo"
+              className="mb-4"
+            />
+            <h1 className="text-6xl font-bold mb-2">TrailMixer</h1>
+          </div>
           <p className="text-slate-400">
             Your dream software for creating promotional videos for movies,
             events, and beyond!
@@ -82,10 +93,14 @@ export default function Home() {
             className="h-fit"
           >
             <Card className="bg-slate-800 border-slate-700 py-20">
-              <div className=" flex flex-col justify-between h-60">
+              <div className=" flex flex-col justify-between h-64">
                 <CardHeader className="text-white px-12">
-                  <CardTitle className="mb-5">{contentItem.title}</CardTitle>
-                  <CardDescription>{contentItem.description}</CardDescription>
+                  <CardTitle className="mb-5 text-2xl">
+                    {contentItem.title}
+                  </CardTitle>
+                  <CardDescription className="text-white text-lg">
+                    {contentItem.description}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex justify-center px-12">
                   <Button variant="secondary" className="w-fit px-10">

@@ -24,17 +24,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Uploader } from "uploader";
-import { UploadButton } from "react-uploader";
+// import { Uploader } from "uploader";
+// import { UploadButton } from "react-uploader";
 
 import { useState, useEffect } from "react";
+import OrderList from "@/components/ui/orderlist";
 import Loading from "@/components/ui/loading";
+import Uploader from "@/components/ui/uploader";
 
-const uploader = Uploader({
-  apiKey: "free", // Get production API keys from Bytescale
-});
+const options = { multi: true, mimeTypes: ["video/mp4"] };
 
-const options = { multi: true };
+interface vid {
+  id: string;
+  url: string;
+  name: string;
+  position: number;
+}
 
 export default function Trailer() {
   const loadingStates = {
@@ -47,9 +52,6 @@ export default function Trailer() {
   const [uploadLoading, setUploadLoading] = useState<LoadingState>(
     loadingStates.NOT_STARTED
   );
-  //   const [analysisLoading, setAnalysisLoading] = useState<LoadingState>(
-  //     loadingStates.NOT_STARTED
-  //   );
   const [processLoading, setProcessLoading] = useState<LoadingState>(
     loadingStates.NOT_STARTED
   );
@@ -57,9 +59,12 @@ export default function Trailer() {
   const [previewLoading, setPreviewLoading] = useState<LoadingState>(
     loadingStates.NOT_STARTED
   );
-  //   const [outputLoading, setOutputLoading] = useState<LoadingState>(
-  //     loadingStates.NOT_STARTED
-  //   );
+
+  const [title, setTitle] = useState("");
+  const [vibe, setVibe] = useState("");
+  const [videoLength, setVideoLength] = useState(30);
+  const [fileType, setFileType] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<vid[]>([]);
 
   return (
     <div className="font-sans bg-slate-950 text-white min-h-screen p-8 sm:p-20 grid grid-rows-[auto_1fr_auto] gap-16">
@@ -174,21 +179,19 @@ export default function Trailer() {
                       whileTap={{ scale: 0.95 }}
                       className="w-fit"
                     >
-                      <UploadButton
-                        uploader={uploader}
-                        options={options}
-                        onComplete={(files) => {
-                          alert(files.map((x) => x.fileUrl).join("\n"));
+                      <Uploader
+                        onComplete={(vids) => {
+                          setUploadedFiles(vids);
+                          console.log("Saved uploaded file URLs:", vids);
                         }}
-                      >
-                        {({ onClick }) => (
-                          <Button className="p-6 text-xl" onClick={onClick}>
-                            Upload a file...
-                          </Button>
-                        )}
-                      </UploadButton>
+                      />
                     </motion.div>
                   </div>
+
+                  <OrderList
+                    vids={uploadedFiles}
+                    onChange={(updated) => setUploadedFiles(updated)}
+                  />
 
                   <div className="w-full flex justify-end mt-12">
                     <Button
@@ -209,7 +212,8 @@ export default function Trailer() {
 
         {/* Editor */}
         {uploadLoading === loadingStates.DONE &&
-          processLoading === loadingStates.NOT_STARTED && (
+          processLoading === loadingStates.NOT_STARTED &&
+          previewLoading === loadingStates.NOT_STARTED && (
             <div className="w-full flex flex-col items-center justify-center">
               <Card className="bg-slate-100 border-slate-700 py-10 w-1/2">
                 <div className=" flex flex-col justify-between h-fit">
@@ -223,20 +227,72 @@ export default function Trailer() {
                 </div>
               </Card>
 
-              <Button
-                className="w-fit p-6 text-lg mt-10"
-                variant="secondary"
-                onClick={() => {
-                  setProcessLoading(loadingStates.LOADING); // actual value
-                  setProcessLoading(loadingStates.DONE); // temporary
-                }}
-              >
-                Finish
-              </Button>
+              <div className="h-fit w-fit flex flex-col gap-4 p-10">
+                <Button
+                  variant="secondary"
+                  className="w-fit p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
+                  onClick={() => {
+                    // setPreviewLoading(loadingStates.LOADING); // actual value
+                    setPreviewLoading(loadingStates.DONE); // temporary
+                  }}
+                >
+                  Preview Trailer
+                </Button>
+                <Button
+                  className="w-full p-6 text-lg mt-10"
+                  variant="secondary"
+                  onClick={() => {
+                    setProcessLoading(loadingStates.LOADING); // actual value
+                    setProcessLoading(loadingStates.DONE); // temporary
+                  }}
+                >
+                  Finish
+                </Button>
+              </div>
             </div>
           )}
 
-        {/* Video Player */}
+        {/* Preview Player */}
+        {uploadLoading === loadingStates.DONE &&
+          previewLoading === loadingStates.DONE && (
+            <div className="w-full flex flex-col items-center justify-center">
+              <Card className="bg-slate-100 border-slate-700 py-10 w-1/2">
+                <div className=" flex flex-col justify-between h-fit">
+                  <CardContent className="flex flex-col justify-center px-8 gap-x-6">
+                    <div className="flex flex-col gap-y-4">
+                      <div className="h-[20rem] w-1/2 flex justify-center">
+                        Video display here
+                      </div>
+                    </div>
+                  </CardContent>
+                </div>
+              </Card>
+              <div className="h-fit w-fit flex flex-col gap-4 p-10">
+                <Button
+                  variant="secondary"
+                  className="w-full p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
+                  onClick={() => {
+                    setPreviewLoading(loadingStates.NOT_STARTED);
+                  }}
+                >
+                  Go back to Trailer Editor
+                </Button>
+
+                <Button
+                  className="w-full p-6 text-lg mt-10"
+                  variant="secondary"
+                  onClick={() => {
+                    setUploadLoading(loadingStates.DONE);
+                    setProcessLoading(loadingStates.DONE);
+                  }}
+                >
+                  Finish
+                </Button>
+              </div>
+            </div>
+          )}
+
+        {/* Video Downloader */}
         {uploadLoading === loadingStates.DONE &&
           processLoading === loadingStates.DONE && (
             <div className="w-full flex flex-col items-center justify-center">
@@ -251,25 +307,17 @@ export default function Trailer() {
                   </CardContent>
                 </div>
               </Card>
-
-              <Button
-                variant="secondary"
-                className="w-fit p-6 text-lg mt-10 mb-16 text-white bg-blue-500 hover:bg-blue-600"
-              >
-                Download
-              </Button>
-
-              <div className="h-fit w-fit flex flex-col gap-4">
-                {/* <Button
+              <div className="h-fit w-fit flex flex-col gap-6 p-10">
+                <Button
                   variant="secondary"
-                  className="w-full p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
+                  className="w-full p-6 text-lg text-white bg-blue-500 hover:bg-blue-600"
                 >
-                  Go back to Trailer Editor
-                </Button> */}
+                  Download
+                </Button>
 
                 <Button
                   variant="secondary"
-                  className="w-full p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
+                  className="w-fit p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
                   onClick={() => {
                     setUploadLoading(loadingStates.NOT_STARTED);
                     setProcessLoading(loadingStates.NOT_STARTED);
@@ -282,7 +330,8 @@ export default function Trailer() {
           )}
 
         {(uploadLoading === loadingStates.LOADING ||
-          processLoading === loadingStates.LOADING) && <Loading />}
+          processLoading === loadingStates.LOADING ||
+          previewLoading === loadingStates.LOADING) && <Loading />}
       </main>
 
       <footer className="text-center text-slate-600 text-sm">
