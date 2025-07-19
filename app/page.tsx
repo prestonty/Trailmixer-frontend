@@ -18,7 +18,7 @@ export default function Home() {
     {
       title: "Create Stunning Trailers",
       description:
-        "Our software will match the proper background music, sound effects, and clips you need to wow your audience.",
+        "Our software will match the proper background music, sound effects, and stitch together video clips to impress your audience.",
     },
     {
       title: "Fast & Intuitive Editing",
