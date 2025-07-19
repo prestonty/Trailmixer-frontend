@@ -54,6 +54,11 @@ export default function OrderList({ vids, onChange }: OrderListProps) {
 
   return (
     <div className="p-4 w-80 mx-auto text-white text-md">
+      {vids.length > 1 && (
+        <h3 className="text-black text-xl font-semibold text-center py-6">
+          Order your clips:
+        </h3>
+      )}
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext
           items={items.map((item) => item.id)}
