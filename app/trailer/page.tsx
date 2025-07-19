@@ -43,7 +43,23 @@ interface vid {
   position: number;
 }
 
-// interface audio {}
+interface video {
+  name: string;
+  start: number;
+  end: number;
+  timelineStart: number;
+  file: File;
+}
+
+interface audio {
+  name: string;
+  start: number;
+  end: number;
+  timelineStart: number;
+  file: File;
+}
+
+interface video {}
 
 export default function Trailer() {
   const loadingStates = {
@@ -78,8 +94,69 @@ export default function Trailer() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [parentWidth, setParentWidth] = useState(0);
 
-  //   const [audioFiles, setAudioFiles] = useState<audio[]>([]);
-  //   const [videoFiles, setVideoFiles] = useState<video[]>([]);
+  const [audioFiles, setAudioFiles] = useState<audio[]>([]);
+  const [videoFiles, setVideoFiles] = useState<video[]>([]);
+
+  function handleClipDrag(
+    type: "audio" | "video",
+    index: number,
+    newX: number
+  ) {
+    if (type === "audio") {
+      setAudioFiles((prev) => {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], timelineStart: newX };
+        return updated;
+      });
+    } else {
+      setVideoFiles((prev) => {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], timelineStart: newX };
+        return updated;
+      });
+    }
+  }
+
+  function handleClipResize(
+    type: "audio" | "video",
+    index: number,
+    deltaLeftPx: number,
+    deltaRightPx: number,
+    blockWidthPx: number,
+    clipDuration: number
+  ) {
+    // Convert delta px to time:
+    const pxPerSecond = blockWidthPx / clipDuration;
+
+    const deltaStartSec = deltaLeftPx / pxPerSecond;
+    const deltaEndSec = deltaRightPx / pxPerSecond;
+
+    if (type === "audio") {
+      setAudioFiles((prev) => {
+        const updated = [...prev];
+        const clip = updated[index];
+
+        updated[index] = {
+          ...clip,
+          start: clip.start + deltaStartSec,
+          end: clip.end - deltaEndSec,
+        };
+        return updated;
+      });
+    } else {
+      setVideoFiles((prev) => {
+        const updated = [...prev];
+        const clip = updated[index];
+
+        updated[index] = {
+          ...clip,
+          start: clip.start + deltaStartSec,
+          end: clip.end - deltaEndSec,
+        };
+        return updated;
+      });
+    }
+  }
 
   useEffect(() => {
     if (parentRef.current) {
@@ -223,10 +300,10 @@ export default function Trailer() {
                     </div>
 
                     {/* File Type */}
-                    <div className="flex flex-col gap-y-2">
+                    <div className="flex flex-col gap-y-2 w-full">
                       <Label htmlFor="fileType">File Type</Label>
                       <Select name="fileType" required>
-                        <SelectTrigger id="fileType" className="w-[180px]">
+                        <SelectTrigger id="fileType" className="w-full">
                           <SelectValue placeholder="Select file type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -239,7 +316,7 @@ export default function Trailer() {
                     </div>
                   </form>
 
-                  <div className="w-full flex justify-center my-20">
+                  <div className="w-full flex justify-center mt-15 mb-10">
                     <motion.div
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -288,15 +365,60 @@ export default function Trailer() {
                     {/* Repeat this for as many audio clips there are */}
 
                     <div className="relative w-full h-16 flex flex-col gap-y-4">
-                      {/* add blocks here in a vertical col format */}
-                      <ClipBlock
-                        initialX={0}
-                        initialWidth={100}
-                        parentWidth={parentWidth}
-                        clipName="Testing"
-                        isAudio={true}
-                      />
+                      {videoFiles.map((videoItem, index) => {
+                        return (
+                          <div className="w-full">
+                            <ClipBlock
+                              key={index}
+                              initialX={videoItem.start}
+                              initialWidth={100}
+                              parentWidth={parentWidth}
+                              clipName={videoItem.name}
+                              isAudio={false}
+                              //   onChange={(newX, newWidth) =>
+                              //     handleClipChange("video", index, newX, newWidth)
+                              //   }
+                              onDragMove={(newX) =>
+                                handleClipDrag("video", index, newX)
+                              }
+                              // blockWidthPx,
+                              // clipDuration
+                              onResizeMove={(deltaLeftPx, deltaRightPx) =>
+                                handleClipResize(
+                                  "video",
+                                  index,
+                                  deltaLeftPx,
+                                  deltaRightPx,
+                                  blockWidthPx,
+                                  clipDuration
+                                )
+                              }
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    {audioFiles.map((audioItem, index) => {
+                      return (
+                        <div
+                          className="relative w-full h-16 flex flex-col gap-y-4"
+                          key={index}
+                        >
+                          {/* add blocks here in a vertical col format */}
+                          <ClipBlock
+                            initialX={audioItem.start}
+                            initialWidth={100} // Need to calculate using end - start then convert based on the parent size
+                            parentWidth={parentWidth}
+                            clipName={audioItem.name}
+                            isAudio={true}
+                            onChange={(newX, newWidth) =>
+                              handleClipChange("audio", index, newX, newWidth)
+                            }
+                          />
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </div>
               </Card>

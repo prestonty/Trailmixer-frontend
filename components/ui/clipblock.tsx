@@ -7,7 +7,8 @@ interface ClipBlockProps {
   initialX: number; // Initial horizontal position in pixels
   initialWidth: number; // Initial width in pixels
   parentWidth: number; // Total width of timeline in pixels
-  onChange?: (x: number, width: number) => void; // Optional callbac
+  onDragMove?: (newX: number) => void;
+  onResizeMove?: (deltaStart: number, deltaEnd: number) => void;
   clipName: string;
   isAudio: boolean;
 }
@@ -16,7 +17,8 @@ export default function ClipBlock({
   initialX,
   initialWidth,
   parentWidth,
-  onChange,
+  onDragMove,
+  onResizeMove,
   clipName,
   isAudio,
 }: ClipBlockProps) {
@@ -42,7 +44,7 @@ export default function ClipBlock({
           target.setAttribute("data-x", String(newX));
 
           setX(newX);
-          onChange?.(newX, width);
+          onDragMove?.(newX);
         },
       },
     });
@@ -64,6 +66,11 @@ export default function ClipBlock({
           });
 
           Object.assign(event.target.dataset, { x, y });
+
+          const deltaLeft = event.deltaRect.left; // px resized from left
+          const deltaRight = event.deltaRect.right; // px resized from right
+
+          onResizeMove?.(deltaLeft, deltaRight);
         },
       },
     });
@@ -72,7 +79,7 @@ export default function ClipBlock({
       drag?.unset();
       resize.unset();
     };
-  }, [parentWidth, onChange]);
+  }, [parentWidth, onDragMove, onResizeMove]);
 
   return (
     <div
