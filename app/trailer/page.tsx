@@ -115,19 +115,15 @@ export default function Trailer() {
       // Auto-download the video
       const autoDownloadVideo = async () => {
         try {
-          const response = await fetch(
+          const response = await axios.post(
             `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${urlJobId}`,
+            {}, // POST body (empty in this case)
             {
-              method: "POST",
+              responseType: "blob",
             }
           );
 
-          if (!response.ok) {
-            throw new Error(`Failed to download video: ${response.statusText}`);
-          }
-
-          const blob = await response.blob();
-          const videoUrl = URL.createObjectURL(blob);
+          const videoUrl = URL.createObjectURL(response.data);
           setVideoUrl(videoUrl);
           setProcessLoading(loadingStates.DONE);
 
@@ -371,9 +367,9 @@ export default function Trailer() {
 
           return {
             name: filename,
-            start: audioData.start || 0,
+            start: 0, // audio clip always starts at 0
             end: audioData.end || 30, // fallback to 30 seconds if end time not provided
-            timelineStart: 0, // Initialize at timeline start, user can drag to reposition
+            timelineStart: audioData.start, // Initialize at timeline start, user can drag to reposition
             file: new File([], filepath), // Create a placeholder File object with the filepath as name
           };
         });
