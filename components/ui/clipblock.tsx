@@ -141,6 +141,13 @@ export default function ClipBlock({
     };
   }, [parentWidth, onDragMove, onDragEnd, onResizeMove, onResizeEnd]);
 
+  useEffect(() => {
+    if (blockRef.current) {
+      blockRef.current.style.transform = `translateX(${initialX}px)`;
+      blockRef.current.setAttribute("data-x", String(initialX));
+    }
+  }, [initialX]);
+
   return (
     <div
       ref={blockRef}
