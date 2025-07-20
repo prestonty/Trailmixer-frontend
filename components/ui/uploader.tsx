@@ -37,7 +37,7 @@ export default function Uploader({ onComplete }: UploadButtonProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="video/mp4"
+        accept="video/mp4,video/quicktime"
         multiple
         className="hidden"
         onChange={handleFileChange}

@@ -35,7 +35,7 @@ import { useLayoutEffect } from "react";
 import { orderFilesByPosition } from "@/lib/utils";
 import axios from "axios";
 
-const options = { multi: true, mimeTypes: ["video/mp4"] };
+const options = { multi: true, mimeTypes: ["video/mp4", "video/quicktime"] };
 
 interface vid {
   id: string;
@@ -218,33 +218,6 @@ export default function Trailer() {
     }
   }
 
-  function handleClipChange(
-    type: "audio" | "video",
-    index: number,
-    newX: number,
-    newWidth: number
-  ) {
-    if (type === "audio") {
-      setAudioFiles((prev) => {
-        const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          timelineStart: newX,
-        };
-        return updated;
-      });
-    } else {
-      setVideoFiles((prev) => {
-        const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          timelineStart: newX,
-        };
-        return updated;
-      });
-    }
-  }
-
   function handleClipResize(
     type: "audio" | "video",
     index: number,
@@ -313,12 +286,12 @@ export default function Trailer() {
       setParentWidth(rect.width);
     }
 
-      const resizeObserver = new ResizeObserver(() => {
-        if (parentRef.current) {
-          const rect = parentRef.current.getBoundingClientRect();
-          setParentWidth(rect.width);
-        }
-      });
+    const resizeObserver = new ResizeObserver(() => {
+      if (parentRef.current) {
+        const rect = parentRef.current.getBoundingClientRect();
+        setParentWidth(rect.width);
+      }
+    });
 
     if (parentRef.current) {
       resizeObserver.observe(parentRef.current);
@@ -379,7 +352,8 @@ export default function Trailer() {
           },
         }
       );
-      console.log(res.data.message);
+      console.log("1. Make Upload API call");
+      console.log(res.data);
 
       const { job_id, music_path_files } = res.data;
 
@@ -572,6 +546,7 @@ export default function Trailer() {
                       className="w-fit p-6 text-lg"
                       onClick={() => {
                         setUploadLoading(loadingStates.LOADING);
+                        setUploadLoading(loadingStates.DONE);
                         sendUploadedVideos();
                       }}
                     >
@@ -611,14 +586,6 @@ export default function Trailer() {
                           const initialX =
                             (audioItem.timelineStart / videoLength) *
                             parentWidth; // calculate start time in pixels
-                          console.log(
-                            "---------------------------------------------------------"
-                          );
-                          console.log("audioItem.end: ", audioItem.end);
-                          console.log("audioItem.start: ", audioItem.start);
-
-                          console.log("clipDuration:", clipDuration);
-                          console.log("timelineStart", audioItem.timelineStart);
 
                           return (
                             <ClipBlock
@@ -657,7 +624,8 @@ export default function Trailer() {
                   variant="secondary"
                   className="w-full p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
                   onClick={() => {
-                    setPreviewLoading(loadingStates.DONE);
+                    // setPreviewLoading(loadingStates.LOADING); // actual value
+                    setPreviewLoading(loadingStates.DONE); // temporary
                   }}
                 >
                   Preview Trailer
@@ -666,7 +634,8 @@ export default function Trailer() {
                   className="w-full p-6 text-lg mt-10"
                   variant="secondary"
                   onClick={() => {
-                    setProcessLoading(loadingStates.DONE);
+                    setProcessLoading(loadingStates.LOADING); // actual value
+                    setProcessLoading(loadingStates.DONE); // temporary
                   }}
                 >
                   Finish
