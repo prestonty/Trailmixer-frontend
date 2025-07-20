@@ -119,13 +119,20 @@ export default function Trailer() {
       timelineStart: 0,
       file: new File([], "audio1.mp3"),
     },
-    // {
-    //   name: "Audio 2",
-    //   start: 2,
-    //   end: 6,
-    //   timelineStart: 14,
-    //   file: new File([], "audio2.mp3"),
-    // },
+    {
+      name: "Audio 2",
+      start: 2,
+      end: 6,
+      timelineStart: 14,
+      file: new File([], "audio2.mp3"),
+    },
+    {
+      name: "Audio 3",
+      start: 10,
+      end: 16,
+      timelineStart: 20,
+      file: new File([], "audio3.mp3"),
+    },
   ];
 
   const [audioFiles, setAudioFiles] = useState<audio[]>(mockAudioFiles);
@@ -143,8 +150,6 @@ export default function Trailer() {
           ...updated[index],
           timelineStart: (finalX * videoLength) / parentWidth,
         };
-        console.log((finalX * videoLength) / parentWidth);
-
         return updated;
       });
     } else {
@@ -170,30 +175,47 @@ export default function Trailer() {
     // Convert delta px to time:
     const pxPerSecond = blockWidthPx / clipDuration;
 
-    const deltaStartSec = deltaLeftPx / pxPerSecond;
-    const deltaEndSec = deltaRightPx / pxPerSecond;
+    let deltaStartSec = deltaLeftPx / pxPerSecond;
+    let deltaEndSec = deltaRightPx / pxPerSecond;
+
+    // Get original values
+    const clips = type === "audio" ? audioFiles : videoFiles;
+    const clip = clips[index];
+    const minDuration = 0.1; // or whatever your minimum allowed is
+
+    // Calculate new proposed start/end
+    let newStart = clip.start + deltaStartSec;
+    let newEnd = clip.end + deltaEndSec;
+
+    // Clamp: don't let start go below zero
+    if (newStart < 0) {
+      deltaStartSec -= newStart; // remove overflow
+      newStart = 0;
+    }
+    // Clamp: don't let duration go below min
+    if (newEnd - newStart < minDuration) {
+      // Shrinking right
+      deltaEndSec += minDuration - (newEnd - newStart);
+      newEnd = newStart + minDuration;
+    }
 
     if (type === "audio") {
       setAudioFiles((prev) => {
         const updated = [...prev];
-        const clip = updated[index];
-
         updated[index] = {
           ...clip,
-          start: clip.start + deltaStartSec,
-          end: clip.end - deltaEndSec,
+          start: newStart,
+          end: newEnd,
         };
         return updated;
       });
     } else {
       setVideoFiles((prev) => {
         const updated = [...prev];
-        const clip = updated[index];
-
         updated[index] = {
           ...clip,
-          start: clip.start + deltaStartSec,
-          end: clip.end - deltaEndSec,
+          start: newStart,
+          end: newEnd,
         };
         return updated;
       });
@@ -407,43 +429,14 @@ export default function Trailer() {
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     {/* Repeat this for as many audio clips there are */}
 
-                    {/* <div className="relative w-full h-16 flex flex-col gap-y-4">
-                      {videoFiles.map((videoItem, index) => {
-                        const clipDuration = videoItem.end - videoItem.start; // duration in seconds
-                        const blockWidthPx =
-                          (clipDuration / videoLength) * parentWidth; // Total pixels of block parent is pixels, videoLength is total timeline length
-                        const initialX =
-                          (videoItem.timelineStart / videoLength) * parentWidth; // calculate start time in pixels
-
-                        return (
-                          <ClipBlock
-                            key={index}
-                            initialX={initialX}
-                            initialWidth={blockWidthPx}
-                            parentWidth={parentWidth}
-                            clipName={videoItem.name}
-                            isAudio={false}
-                            onDragMove={(newX) =>
-                              handleClipDrag("video", index, newX)
-                            }
-                            onResizeMove={(deltaLeftPx, deltaRightPx) =>
-                              handleClipResize(
-                                "video",
-                                index,
-                                deltaLeftPx,
-                                deltaRightPx,
-                                blockWidthPx,
-                                clipDuration
-                              )
-                            }
-                          ></ClipBlock>
-                        );
-                      })}
-                    </div> */}
+                    <div
+                      ref={parentRef}
+                      className="relative w-full h-fit bg-green-100"
+                    ></div>
 
                     <div
                       ref={parentRef}
-                      className="relative w-full h-16 bg-yellow-200"
+                      className="relative w-full h-fit bg-blue-100"
                     >
                       {parentWidth > 0 &&
                         audioFiles.map((audioItem, index) => {
@@ -453,19 +446,14 @@ export default function Trailer() {
                           const initialX =
                             (audioItem.timelineStart / videoLength) *
                             parentWidth; // calculate start time in pixels
+                          console.log(
+                            "---------------------------------------------------------"
+                          );
                           console.log("audioItem.end: ", audioItem.end);
                           console.log("audioItem.start: ", audioItem.start);
 
                           console.log("clipDuration:", clipDuration);
-                          console.log("blockWidthPx:", blockWidthPx);
-                          console.log("videoLength:", videoLength);
-                          console.log("initialX:", initialX);
-                          console.log("parentWidth:", parentWidth);
-
-                          // <div
-                          //   className="relative w-full h-16 flex flex-col gap-y-4"
-                          //   key={index}
-                          // >
+                          console.log("timelineStart", audioItem.timelineStart);
 
                           return (
                             <ClipBlock
@@ -488,6 +476,9 @@ export default function Trailer() {
                                   clipDuration
                                 )
                               }
+                              clipStart={audioItem.start}
+                              clipDuration={clipDuration}
+                              blockWidthPx={blockWidthPx}
                             ></ClipBlock>
                           );
                         })}
