@@ -93,6 +93,9 @@ export default function Trailer() {
   const [uploadedFiles, setUploadedFiles] = useState<vid[]>([]);
   const [jobId, setJobId] = useState<string>("");
   const [videoUrl, setVideoUrl] = useState<string>("");
+  const [audioTimestamps, setAudioTimestamps] = useState<{
+    [key: string]: { start: number; end: number };
+  }>({});
 
   // Cleanup video URL when component unmounts
   useEffect(() => {
@@ -103,39 +106,15 @@ export default function Trailer() {
     };
   }, [videoUrl]);
 
-  // Auto-download video if job_id is in URL params
+  // Auto-download video if job_id is in URL params (legacy support)
   useEffect(() => {
     const urlJobId = searchParams.get("job_id");
     if (urlJobId && !jobId && !videoUrl) {
-      console.log("Auto-downloading video for job:", urlJobId);
+      console.log("Legacy auto-download for job:", urlJobId);
       setJobId(urlJobId);
       setUploadLoading(loadingStates.DONE);
-      setProcessLoading(loadingStates.LOADING);
-
-      // Auto-download the video
-      const autoDownloadVideo = async () => {
-        try {
-          const response = await axios.post(
-            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${urlJobId}`,
-            {}, // POST body (empty in this case)
-            {
-              responseType: "blob",
-            }
-          );
-
-          const videoUrl = URL.createObjectURL(response.data);
-          setVideoUrl(videoUrl);
-          setProcessLoading(loadingStates.DONE);
-
-          console.log("Video auto-downloaded successfully");
-        } catch (err) {
-          console.error("Error auto-downloading video:", err);
-          setProcessLoading(loadingStates.NOT_STARTED);
-          setUploadLoading(loadingStates.NOT_STARTED);
-        }
-      };
-
-      autoDownloadVideo();
+      setProcessLoading(loadingStates.DONE);
+      // Note: This is legacy support - new flow goes through upload → crop → download
     }
   }, [searchParams, jobId, videoUrl, loadingStates]);
 
@@ -294,32 +273,56 @@ export default function Trailer() {
     }
   }, [uploadLoading, processLoading]);
 
-  const downloadProcessedVideo = async () => {
+  const downloadProcessedVideo = async (isPreview = false) => {
     if (!jobId) {
       console.error("No job ID available for video download");
       return;
     }
 
+    if (!audioTimestamps || Object.keys(audioTimestamps).length === 0) {
+      console.error("No audio timestamps available for video download");
+      return;
+    }
+
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${jobId}`,
+      console.log(
+        `🎵 ${isPreview ? "Previewing" : "Downloading"} processed video...`
+      );
+      console.log("   🆔 Job ID:", jobId);
+      console.log("   🎼 Audio timestamps:", audioTimestamps);
+
+      const requestData = {
+        job_id: jobId,
+        audio_timestamps: audioTimestamps,
+        video_volume: 0.8,
+        music_volume: 0.3,
+        ...(isPreview ? {} : { output_filename: `trailer_${jobId}` }),
+      };
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download`,
+        requestData,
         {
-          method: "GET",
+          responseType: "blob",
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to download video: ${response.statusText}`);
-      }
-
       // Create blob URL from the response
-      const blob = await response.blob();
-      const videoUrl = URL.createObjectURL(blob);
+      const videoUrl = URL.createObjectURL(response.data);
       setVideoUrl(videoUrl);
 
-      console.log("Video downloaded successfully");
+      console.log(`✅ Video ${isPreview ? "preview" : "download"} successful!`);
+      console.log(
+        `   📊 File size: ${(response.data.size / 1024 / 1024).toFixed(1)} MB`
+      );
+
+      return videoUrl;
     } catch (err) {
-      console.error("Error downloading video:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error(
+        `❌ Error ${isPreview ? "previewing" : "downloading"} video:`,
+        errorMessage
+      );
     }
   };
 
@@ -341,19 +344,16 @@ export default function Trailer() {
       setUploadLoading(loadingStates.LOADING);
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/upload`,
-        formData,
         {
           headers: {
             "Content-Type": "multipart/form-data",
           },
         }
       );
-      console.log("1. Make Upload API call");
-      console.log(res.data);
 
       const { job_id, music_file_paths } = res.data;
 
-      // Store job_id for later video download
+      // Store data for later use
       setJobId(job_id);
 
       // Process music_path_files and add to audioFiles
@@ -559,11 +559,11 @@ export default function Trailer() {
                   <div className="w-full flex justify-end mt-12">
                     <Button
                       className="w-fit p-6 text-lg"
-                      onClick={() => {
+                      onClick={async () => {
                         setUploadLoading(loadingStates.LOADING);
-                        setUploadLoading(loadingStates.DONE);
-                        sendUploadedVideos();
+                        await sendUploadedVideos();
                       }}
+                      disabled={uploadedFiles.length === 0}
                     >
                       Submit
                     </Button>
@@ -638,9 +638,15 @@ export default function Trailer() {
                 <Button
                   variant="secondary"
                   className="w-full p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
-                  onClick={() => {
-                    // setPreviewLoading(loadingStates.LOADING); // actual value
-                    setPreviewLoading(loadingStates.DONE); // temporary
+                  onClick={async () => {
+                    setPreviewLoading(loadingStates.LOADING);
+                    try {
+                      await downloadProcessedVideo(true); // Preview mode
+                      setPreviewLoading(loadingStates.DONE);
+                    } catch (error) {
+                      console.error("Preview failed:", error);
+                      setPreviewLoading(loadingStates.NOT_STARTED);
+                    }
                   }}
                 >
                   Preview Trailer
@@ -648,9 +654,15 @@ export default function Trailer() {
                 <Button
                   className="w-full p-6 text-lg mt-10"
                   variant="secondary"
-                  onClick={() => {
-                    setProcessLoading(loadingStates.LOADING); // actual value
-                    setProcessLoading(loadingStates.DONE); // temporary
+                  onClick={async () => {
+                    setProcessLoading(loadingStates.LOADING);
+                    try {
+                      await downloadProcessedVideo(false); // Final download
+                      setProcessLoading(loadingStates.DONE);
+                    } catch (error) {
+                      console.error("Final processing failed:", error);
+                      setProcessLoading(loadingStates.NOT_STARTED);
+                    }
                   }}
                 >
                   Finish
