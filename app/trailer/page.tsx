@@ -326,24 +326,27 @@ export default function Trailer() {
     }
   };
 
-  // Upload videos, get job id and music track list
   const sendUploadedVideos = async () => {
-    // sort for each
-    const filesToOrder = uploadedFiles.map((item) => ({
-      file: item.file,
-      position: item.position,
-    }));
-
-    const sortedFiles = orderFilesByPosition(filesToOrder);
-    const formData = new FormData();
-    sortedFiles.forEach((file) => {
-      formData.append("video_files", file);
-    });
-
     try {
-      setUploadLoading(loadingStates.LOADING);
-      const res = await axios.post(
+      console.log("🚀 Starting video upload process...");
+
+      // Sort and prepare files
+      const filesToOrder = uploadedFiles.map((item) => ({
+        file: item.file,
+        position: item.position,
+      }));
+
+      const sortedFiles = orderFilesByPosition(filesToOrder);
+      const formData = new FormData();
+      sortedFiles.forEach((file) => {
+        formData.append("video_files", file);
+      });
+
+      // Step 1: Upload videos
+      console.log("📤 Step 1: Uploading videos...");
+      const uploadRes = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/upload`,
+        formData,
         {
           headers: {
             "Content-Type": "multipart/form-data",
@@ -351,39 +354,56 @@ export default function Trailer() {
         }
       );
 
-      const { job_id, music_file_paths } = res.data;
+      const { job_id, audio_timestamps, music_file_paths } = uploadRes.data;
+      console.log("✅ Upload successful!");
+      console.log("   🆔 Job ID:", job_id);
+      console.log("   🎵 Audio timestamps:", audio_timestamps);
 
       // Store data for later use
       setJobId(job_id);
+      setAudioTimestamps(audio_timestamps);
 
-      // Process music_path_files and add to audioFiles
+      // Process music_file_paths for timeline display
       if (music_file_paths) {
         const processedAudioFiles: audio[] = Object.entries(
           music_file_paths
         ).map(([filepath, audioData]: [string, any]) => {
-          // Extract filename from filepath to use as name\
-          console.log("audioData: ", audioData);
-          console.log("filepath: ", filepath);
           const filename =
             filepath.split("/").pop() || filepath.split("\\").pop() || filepath;
 
           return {
-            name: filepath,
-            start: 0, // audio clip always starts at 0
-            end: audioData.end || 30, // fallback to 30 seconds if end time not provided
-            timelineStart: audioData.start, // Initialize at timeline start, user can drag to reposition
-            file: new File([], filepath), // Create a placeholder File object with the filepath as name
+            name: filename,
+            start: 0,
+            end: audioData.end || videoLength,
+            timelineStart: audioData.start,
+            file: new File([], filepath),
           };
         });
 
         setAudioFiles(processedAudioFiles);
-        console.log("Processed audio files:", processedAudioFiles);
-        // Set loading to done after successful API call
+        console.log(
+          "🎼 Processed audio files for timeline:",
+          processedAudioFiles
+        );
       }
+
+      // Step 2: Crop video using AI-detected segments
+      console.log("✂️ Step 2: Cropping video using AI segments...");
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/crop?job_id=${job_id}`
+      );
+      console.log("✅ Video cropping completed!");
+
+      // Upload and cropping complete - show editor
       setUploadLoading(loadingStates.DONE);
-    } catch (err) {
-      console.error("Axios POST error:", err);
-      console.log("Error sending POST");
+      console.log("🎬 Ready for trailer editing!");
+    } catch (error) {
+      console.error("❌ Upload/crop process failed:", error);
+      const errorDetails =
+        (error as any)?.response?.data ||
+        (error as Error)?.message ||
+        "Unknown error";
+      console.log("Error details:", errorDetails);
       // Reset loading state on error
       setUploadLoading(loadingStates.NOT_STARTED);
     }
