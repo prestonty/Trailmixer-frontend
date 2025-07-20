@@ -185,7 +185,7 @@ export default function Trailer() {
     },
   ];
 
-  const [audioFiles, setAudioFiles] = useState<audio[]>(mockAudioFiles);
+  const [audioFiles, setAudioFiles] = useState<audio[]>([]);
   const [videoFiles, setVideoFiles] = useState<video[]>([]);
 
   function handleClipDragEnd(
@@ -280,21 +280,19 @@ export default function Trailer() {
     ) {
       const rect = parentRef.current.getBoundingClientRect();
       setParentWidth(rect.width);
-    }
 
-    const resizeObserver = new ResizeObserver(() => {
-      if (parentRef.current) {
-        const rect = parentRef.current.getBoundingClientRect();
-        setParentWidth(rect.width);
-      }
-    });
+      const resizeObserver = new ResizeObserver(() => {
+        if (parentRef.current) {
+          const rect = parentRef.current.getBoundingClientRect();
+          setParentWidth(rect.width);
+        }
+      });
 
-    if (parentRef.current) {
       resizeObserver.observe(parentRef.current);
-    }
 
-    return () => resizeObserver.disconnect();
-  }, []);
+      return () => resizeObserver.disconnect();
+    }
+  }, [uploadLoading, processLoading]);
 
   const downloadProcessedVideo = async () => {
     if (!jobId) {
@@ -325,6 +323,7 @@ export default function Trailer() {
     }
   };
 
+  // Upload videos, get job id and music track list
   const sendUploadedVideos = async () => {
     // sort for each
     const filesToOrder = uploadedFiles.map((item) => ({
@@ -339,6 +338,7 @@ export default function Trailer() {
     });
 
     try {
+      setUploadLoading(loadingStates.LOADING);
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/upload`,
         formData,
@@ -351,22 +351,24 @@ export default function Trailer() {
       console.log("1. Make Upload API call");
       console.log(res.data);
 
-      const { job_id, music_path_files } = res.data;
+      const { job_id, music_file_paths } = res.data;
 
       // Store job_id for later video download
       setJobId(job_id);
 
       // Process music_path_files and add to audioFiles
-      if (music_path_files) {
+      if (music_file_paths) {
         const processedAudioFiles: audio[] = Object.entries(
-          music_path_files
+          music_file_paths
         ).map(([filepath, audioData]: [string, any]) => {
-          // Extract filename from filepath to use as name
+          // Extract filename from filepath to use as name\
+          console.log("audioData: ", audioData);
+          console.log("filepath: ", filepath);
           const filename =
             filepath.split("/").pop() || filepath.split("\\").pop() || filepath;
 
           return {
-            name: filename,
+            name: filepath,
             start: 0, // audio clip always starts at 0
             end: audioData.end || 30, // fallback to 30 seconds if end time not provided
             timelineStart: audioData.start, // Initialize at timeline start, user can drag to reposition
@@ -376,37 +378,54 @@ export default function Trailer() {
 
         setAudioFiles(processedAudioFiles);
         console.log("Processed audio files:", processedAudioFiles);
+        // Set loading to done after successful API call
       }
-
-      // Automatically fetch and display the processed video
-      try {
-        console.log("Fetching processed video for job:", job_id);
-        const videoResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${job_id}`,
-          {
-            method: "GET",
-          }
-        );
-
-        if (videoResponse.ok) {
-          const blob = await videoResponse.blob();
-          const videoUrl = URL.createObjectURL(blob);
-          setVideoUrl(videoUrl);
-          console.log("Video downloaded and ready for display");
-        } else {
-          console.warn("Failed to fetch video:", videoResponse.statusText);
-        }
-      } catch (videoErr) {
-        console.error("Error downloading video:", videoErr);
-      }
-
-      // Set loading to done after successful API call
       setUploadLoading(loadingStates.DONE);
     } catch (err) {
       console.error("Axios POST error:", err);
       console.log("Error sending POST");
       // Reset loading state on error
       setUploadLoading(loadingStates.NOT_STARTED);
+    }
+  };
+
+  // Fetch stitched video
+  const confirmVideoEdit = async () => {
+    // Automatically fetch and display the processed video
+
+    const audioRequest: Record<string, { start: number; end: number }> = {};
+
+    for (const audioItem of audioFiles) {
+      audioRequest[audioItem.name] = {
+        start: audioItem.start,
+        end: audioItem.end,
+      };
+    }
+    const body = {
+      audio_timestamps: audioRequest,
+    };
+    const request = JSON.stringify(body, null, 2);
+
+    try {
+      console.log("Fetching processed video for job:", jobId);
+      const videoResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${jobId}`,
+        {
+          method: "GET",
+        }
+      );
+
+      if (videoResponse.ok) {
+        const blob = await videoResponse.blob();
+        const videoUrl = URL.createObjectURL(blob);
+        setVideoUrl(videoUrl);
+        console.log("Video downloaded and ready for display");
+      } else {
+        console.warn("Failed to fetch video:", videoResponse.statusText);
+      }
+    } catch (videoErr) {
+      console.error("Error downloading video:", videoErr);
+      setProcessLoading(loadingStates.NOT_STARTED);
     }
   };
 
@@ -565,10 +584,10 @@ export default function Trailer() {
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     {/* Repeat this for as many audio clips there are */}
 
-                    <div
+                    {/* <div
                       ref={parentRef}
                       className="relative w-full h-fit bg-green-100"
-                    ></div>
+                    ></div> */}
 
                     <div
                       ref={parentRef}
