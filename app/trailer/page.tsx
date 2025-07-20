@@ -118,7 +118,7 @@ export default function Trailer() {
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${urlJobId}`,
             {
-              method: "GET",
+              method: "POST",
             }
           );
 
