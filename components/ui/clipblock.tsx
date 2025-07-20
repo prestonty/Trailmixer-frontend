@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import interact from "interactjs";
 
 interface ClipBlockProps {
-  initialX: number; // Initial horizontal position in pixels
-  initialWidth: number; // Initial width in pixels
-  parentWidth: number; // Total width of timeline in pixels
-  onDragMove?: (newX: number) => void;
+  initialX: number;
+  initialWidth: number;
+  parentWidth: number;
+  onDragMove?: (newX: number) => void; // For optional live feedback (usually not needed)
+  onDragEnd?: (finalX: number) => void;
   onResizeMove?: (deltaStart: number, deltaEnd: number) => void;
+  onResizeEnd?: (finalLeftDelta: number, finalRightDelta: number) => void;
   clipName: string;
   isAudio: boolean;
 }
@@ -18,45 +20,56 @@ export default function ClipBlock({
   initialWidth,
   parentWidth,
   onDragMove,
+  onDragEnd,
   onResizeMove,
+  onResizeEnd,
   clipName,
   isAudio,
 }: ClipBlockProps) {
   const blockRef = useRef<HTMLDivElement>(null);
+  const leftDeltaRef = useRef(0);
+  const rightDeltaRef = useRef(0);
+
   const [x, setX] = useState(initialX);
   const [width, setWidth] = useState(initialWidth);
 
   useEffect(() => {
     if (!blockRef.current) return;
 
-    let drag: ReturnType<typeof interact> | null = null;
-
-    drag = interact(blockRef.current).draggable({
+    const target = blockRef.current;
+    const drag = interact(target).draggable({
       lockAxis: "x",
       inertia: false,
       listeners: {
         move(event) {
-          const target = blockRef.current!;
           const prevX = parseFloat(target.getAttribute("data-x") || "0");
           const newX = prevX + event.dx;
-
           target.style.transform = `translateX(${newX}px)`;
           target.setAttribute("data-x", String(newX));
-
-          setX(newX);
+          // Only call this if you want *live* feedback (usually skip this!)
           onDragMove?.(newX);
+        },
+        end(event) {
+          const finalX = parseFloat(target.getAttribute("data-x") || "0");
+          // Only update state here!
+          onDragEnd?.(finalX);
         },
       },
     });
 
-    let resize: ReturnType<typeof interact> | null = null;
-
-    resize = interact(blockRef.current).resizable({
+    const resize = interact(target).resizable({
       edges: { top: false, left: true, bottom: false, right: true },
       listeners: {
-        move: function (event) {
-          let { x, y } = event.target.dataset;
+        start() {
+          leftDeltaRef.current = 0;
+          rightDeltaRef.current = 0;
+        },
+        move(event) {
+          // Track total deltas
+          leftDeltaRef.current += event.deltaRect.left;
+          rightDeltaRef.current += event.deltaRect.right;
 
+          let { x, y } = event.target.dataset;
           x = (parseFloat(x) || 0) + event.deltaRect.left;
           y = parseFloat(y) || 0;
 
@@ -66,20 +79,20 @@ export default function ClipBlock({
           });
 
           Object.assign(event.target.dataset, { x, y });
-
-          const deltaLeft = event.deltaRect.left; // px resized from left
-          const deltaRight = event.deltaRect.right; // px resized from right
-
-          onResizeMove?.(deltaLeft, deltaRight);
+        },
+        end(event) {
+          if (onResizeEnd) {
+            onResizeEnd(leftDeltaRef.current, rightDeltaRef.current);
+          }
         },
       },
     });
 
     return () => {
       drag?.unset();
-      resize.unset();
+      resize?.unset();
     };
-  }, [parentWidth, onDragMove, onResizeMove]);
+  }, [parentWidth, onDragMove, onDragEnd, onResizeEnd]);
 
   return (
     <div
