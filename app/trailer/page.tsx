@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import OrderList from "@/components/ui/orderlist";
 import Loading from "@/components/ui/loading";
 import Uploader from "@/components/ui/uploader";
@@ -62,6 +63,8 @@ interface audio {
 interface video {}
 
 export default function Trailer() {
+  const searchParams = useSearchParams();
+
   const loadingStates = {
     NOT_STARTED: 0,
     LOADING: 1,
@@ -89,6 +92,57 @@ export default function Trailer() {
   const [videoLength, setVideoLength] = useState(30);
   const [fileType, setFileType] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<vid[]>([]);
+  const [jobId, setJobId] = useState<string>("");
+  const [videoUrl, setVideoUrl] = useState<string>("");
+
+  // Cleanup video URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (videoUrl) {
+        URL.revokeObjectURL(videoUrl);
+      }
+    };
+  }, [videoUrl]);
+
+  // Auto-download video if job_id is in URL params
+  useEffect(() => {
+    const urlJobId = searchParams.get("job_id");
+    if (urlJobId && !jobId && !videoUrl) {
+      console.log("Auto-downloading video for job:", urlJobId);
+      setJobId(urlJobId);
+      setUploadLoading(loadingStates.DONE);
+      setProcessLoading(loadingStates.LOADING);
+
+      // Auto-download the video
+      const autoDownloadVideo = async () => {
+        try {
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${urlJobId}`,
+            {
+              method: "GET",
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Failed to download video: ${response.statusText}`);
+          }
+
+          const blob = await response.blob();
+          const videoUrl = URL.createObjectURL(blob);
+          setVideoUrl(videoUrl);
+          setProcessLoading(loadingStates.DONE);
+
+          console.log("Video auto-downloaded successfully");
+        } catch (err) {
+          console.error("Error auto-downloading video:", err);
+          setProcessLoading(loadingStates.NOT_STARTED);
+          setUploadLoading(loadingStates.NOT_STARTED);
+        }
+      };
+
+      autoDownloadVideo();
+    }
+  }, [searchParams, jobId, videoUrl, loadingStates]);
 
   // Video Editor
   const parentRef = useRef<HTMLDivElement>(null);
@@ -112,6 +166,33 @@ export default function Trailer() {
       setVideoFiles((prev) => {
         const updated = [...prev];
         updated[index] = { ...updated[index], timelineStart: newX };
+        return updated;
+      });
+    }
+  }
+
+  function handleClipChange(
+    type: "audio" | "video",
+    index: number,
+    newX: number,
+    newWidth: number
+  ) {
+    if (type === "audio") {
+      setAudioFiles((prev) => {
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          timelineStart: newX,
+        };
+        return updated;
+      });
+    } else {
+      setVideoFiles((prev) => {
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          timelineStart: newX,
+        };
         return updated;
       });
     }
@@ -203,9 +284,63 @@ export default function Trailer() {
       );
       console.log("Testing");
       console.log(res.data.message);
+
+      const { job_id, music_path_files } = res.data;
+
+      // Store job_id for later video download
+      setJobId(job_id);
+
+      // Process music_path_files and add to audioFiles
+      if (music_path_files) {
+        const processedAudioFiles: audio[] = Object.entries(
+          music_path_files
+        ).map(([filepath, audioData]: [string, any]) => {
+          // Extract filename from filepath to use as name
+          const filename =
+            filepath.split("/").pop() || filepath.split("\\").pop() || filepath;
+
+          return {
+            name: filename,
+            start: audioData.start || 0,
+            end: audioData.end || 30, // fallback to 30 seconds if end time not provided
+            timelineStart: 0, // Initialize at timeline start, user can drag to reposition
+            file: new File([], filepath), // Create a placeholder File object with the filepath as name
+          };
+        });
+
+        setAudioFiles(processedAudioFiles);
+        console.log("Processed audio files:", processedAudioFiles);
+      }
+
+      // Automatically fetch and display the processed video
+      try {
+        console.log("Fetching processed video for job:", job_id);
+        const videoResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/download/${job_id}`,
+          {
+            method: "GET",
+          }
+        );
+
+        if (videoResponse.ok) {
+          const blob = await videoResponse.blob();
+          const videoUrl = URL.createObjectURL(blob);
+          setVideoUrl(videoUrl);
+          console.log("Video downloaded and ready for display");
+        } else {
+          console.warn("Failed to fetch video:", videoResponse.statusText);
+        }
+      } catch (videoErr) {
+        console.error("Error downloading video:", videoErr);
+      }
+
+      // Set loading to done after successful API call
+      setUploadLoading(loadingStates.DONE);
     } catch (err) {
       console.error("Axios POST error:", err);
       console.log("Error sending POST");
+      // Reset loading state on error
+      setUploadLoading(loadingStates.NOT_STARTED);
     }
   };
 
@@ -340,8 +475,7 @@ export default function Trailer() {
                     <Button
                       className="w-fit p-6 text-lg"
                       onClick={() => {
-                        setUploadLoading(loadingStates.LOADING); // actual value
-                        setUploadLoading(loadingStates.DONE); // temporary
+                        setUploadLoading(loadingStates.LOADING);
                         sendUploadedVideos();
                       }}
                     >
@@ -383,7 +517,10 @@ export default function Trailer() {
                               }
                               // blockWidthPx,
                               // clipDuration
-                              onResizeMove={(deltaLeftPx, deltaRightPx) =>
+                              onResizeMove={(deltaLeftPx, deltaRightPx) => {
+                                const blockWidthPx = 100; // Default width
+                                const clipDuration =
+                                  videoItem.end - videoItem.start;
                                 handleClipResize(
                                   "video",
                                   index,
@@ -391,8 +528,8 @@ export default function Trailer() {
                                   deltaRightPx,
                                   blockWidthPx,
                                   clipDuration
-                                )
-                              }
+                                );
+                              }}
                             />
                           </div>
                         );
@@ -407,14 +544,27 @@ export default function Trailer() {
                         >
                           {/* add blocks here in a vertical col format */}
                           <ClipBlock
-                            initialX={audioItem.start}
+                            initialX={audioItem.timelineStart}
                             initialWidth={100} // Need to calculate using end - start then convert based on the parent size
                             parentWidth={parentWidth}
                             clipName={audioItem.name}
                             isAudio={true}
-                            onChange={(newX, newWidth) =>
-                              handleClipChange("audio", index, newX, newWidth)
+                            onDragMove={(newX) =>
+                              handleClipDrag("audio", index, newX)
                             }
+                            onResizeMove={(deltaLeftPx, deltaRightPx) => {
+                              const blockWidthPx = 100; // Default width
+                              const clipDuration =
+                                audioItem.end - audioItem.start;
+                              handleClipResize(
+                                "audio",
+                                index,
+                                deltaLeftPx,
+                                deltaRightPx,
+                                blockWidthPx,
+                                clipDuration
+                              );
+                            }}
                           />
                         </div>
                       );
@@ -428,8 +578,7 @@ export default function Trailer() {
                   variant="secondary"
                   className="w-full p-6 text-lg rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-md"
                   onClick={() => {
-                    // setPreviewLoading(loadingStates.LOADING); // actual value
-                    setPreviewLoading(loadingStates.DONE); // temporary
+                    setPreviewLoading(loadingStates.DONE);
                   }}
                 >
                   Preview Trailer
@@ -438,8 +587,7 @@ export default function Trailer() {
                   className="w-full p-6 text-lg mt-10"
                   variant="secondary"
                   onClick={() => {
-                    setProcessLoading(loadingStates.LOADING); // actual value
-                    setProcessLoading(loadingStates.DONE); // temporary
+                    setProcessLoading(loadingStates.DONE);
                   }}
                 >
                   Finish
@@ -456,8 +604,21 @@ export default function Trailer() {
                 <div className=" flex flex-col justify-between h-fit">
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     <div className="flex flex-col gap-y-4">
-                      <div className="h-[20rem] w-1/2 flex justify-center">
-                        Video display here
+                      <div className="h-[20rem] w-full flex justify-center">
+                        {videoUrl ? (
+                          <video
+                            src={videoUrl}
+                            controls
+                            className="w-full h-full rounded-lg"
+                            style={{ maxHeight: "20rem" }}
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-slate-600">
+                            Loading video...
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -478,7 +639,7 @@ export default function Trailer() {
                   className="w-full p-6 text-lg mt-10"
                   variant="secondary"
                   onClick={() => {
-                    setUploadLoading(loadingStates.DONE);
+                    setPreviewLoading(loadingStates.NOT_STARTED);
                     setProcessLoading(loadingStates.DONE);
                   }}
                 >
@@ -496,8 +657,21 @@ export default function Trailer() {
                 <div className=" flex flex-col justify-between h-fit">
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     <div className="flex flex-col gap-y-4">
-                      <div className="h-[20rem] w-1/2 flex justify-center">
-                        Video display here
+                      <div className="h-[20rem] w-full flex justify-center">
+                        {videoUrl ? (
+                          <video
+                            src={videoUrl}
+                            controls
+                            className="w-full h-full rounded-lg"
+                            style={{ maxHeight: "20rem" }}
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-slate-600">
+                            Loading video...
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -507,6 +681,17 @@ export default function Trailer() {
                 <Button
                   variant="secondary"
                   className="w-full p-6 text-lg text-white bg-blue-500 hover:bg-blue-600"
+                  onClick={() => {
+                    if (videoUrl && jobId) {
+                      const link = document.createElement("a");
+                      link.href = videoUrl;
+                      link.download = `processed_trailer_${jobId}.mp4`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }
+                  }}
+                  disabled={!videoUrl}
                 >
                   Download
                 </Button>
