@@ -86,16 +86,13 @@ export default function Trailer() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [uploadLoading, processLoading, previewLoading]);
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState("Trailer");
   const [vibe, setVibe] = useState("");
   const [videoLength, setVideoLength] = useState(30);
   const [fileType, setFileType] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<vid[]>([]);
   const [jobId, setJobId] = useState<string>("");
   const [videoUrl, setVideoUrl] = useState<string>("");
-  const [audioTimestamps, setAudioTimestamps] = useState<{
-    [key: string]: { start: number; end: number };
-  }>({});
 
   // Cleanup video URL when component unmounts
   useEffect(() => {
@@ -142,21 +139,21 @@ export default function Trailer() {
 
   const mockAudioFiles: audio[] = [
     {
-      name: "Audio 1",
+      name: "Barbie Girl",
       start: 0,
       end: 10,
       timelineStart: 0,
       file: new File([], "audio1.mp3"),
     },
     {
-      name: "Audio 2",
+      name: "Super Idol",
       start: 2,
       end: 6,
       timelineStart: 14,
       file: new File([], "audio2.mp3"),
     },
     {
-      name: "Audio 3",
+      name: "Vine Boom",
       start: 10,
       end: 16,
       timelineStart: 20,
@@ -279,7 +276,7 @@ export default function Trailer() {
       return;
     }
 
-    if (!audioTimestamps || Object.keys(audioTimestamps).length === 0) {
+    if (!audioFiles || Object.keys(audioFiles).length === 0) {
       console.error("No audio timestamps available for video download");
       return;
     }
@@ -289,11 +286,18 @@ export default function Trailer() {
         `🎵 ${isPreview ? "Previewing" : "Downloading"} processed video...`
       );
       console.log("   🆔 Job ID:", jobId);
-      console.log("   🎼 Audio timestamps:", audioTimestamps);
+
+      const audioTimeStamps = audioFiles.reduce((acc, audioItem) => {
+        acc[audioItem.name] = {
+          start: audioItem.start,
+          end: audioItem.end,
+        };
+        return acc;
+      }, {} as Record<string, { start: number; end: number }>);
 
       const requestData = {
         job_id: jobId,
-        audio_timestamps: audioTimestamps,
+        audio_timestamps: audioTimeStamps,
         video_volume: 0.8,
         music_volume: 0.3,
         ...(isPreview ? {} : { output_filename: `trailer_${jobId}` }),
@@ -354,14 +358,12 @@ export default function Trailer() {
         }
       );
 
-      const { job_id, audio_timestamps, music_file_paths } = uploadRes.data;
+      const { job_id, music_file_paths } = uploadRes.data;
       console.log("✅ Upload successful!");
       console.log("   🆔 Job ID:", job_id);
-      console.log("   🎵 Audio timestamps:", audio_timestamps);
 
       // Store data for later use
       setJobId(job_id);
-      setAudioTimestamps(audio_timestamps);
 
       // Process music_file_paths for timeline display
       if (music_file_paths) {
@@ -604,10 +606,9 @@ export default function Trailer() {
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     {/* Repeat this for as many audio clips there are */}
 
-                    {/* <div
-                      ref={parentRef}
-                      className="relative w-full h-fit bg-green-100"
-                    ></div> */}
+                    <div className="relative w-full h-16 bg-green-500 rounded-md mb-1 flex items-center pl-2">
+                      <p className="text-white">{title}</p>
+                    </div>
 
                     <div
                       ref={parentRef}
