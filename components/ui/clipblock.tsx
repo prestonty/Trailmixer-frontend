@@ -13,6 +13,9 @@ interface ClipBlockProps {
   onResizeEnd?: (finalLeftDelta: number, finalRightDelta: number) => void;
   clipName: string;
   isAudio: boolean;
+  clipStart: number; // <-- add this!
+  clipDuration: number; // <-- add this!
+  blockWidthPx: number;
 }
 
 export default function ClipBlock({
@@ -25,6 +28,9 @@ export default function ClipBlock({
   onResizeEnd,
   clipName,
   isAudio,
+  clipStart,
+  clipDuration,
+  blockWidthPx,
 }: ClipBlockProps) {
   const blockRef = useRef<HTMLDivElement>(null);
   const leftDeltaRef = useRef(0);
@@ -64,8 +70,7 @@ export default function ClipBlock({
           leftDeltaRef.current = 0;
           rightDeltaRef.current = 0;
         },
-        move(event) {
-          // Track total deltas
+        move: function (event) {
           leftDeltaRef.current += event.deltaRect.left;
           rightDeltaRef.current += event.deltaRect.right;
 
@@ -73,13 +78,55 @@ export default function ClipBlock({
           x = (parseFloat(x) || 0) + event.deltaRect.left;
           y = parseFloat(y) || 0;
 
-          Object.assign(event.target.style, {
-            width: `${event.rect.width}px`,
-            transform: `translate(${x}px, 0px)`,
-          });
+          const pxPerSecond = blockWidthPx / clipDuration;
+          const deltaStartSec = leftDeltaRef.current / pxPerSecond;
+          const deltaEndSec = rightDeltaRef.current / pxPerSecond;
+          const newStart = clipStart + deltaStartSec;
+          const newEnd = clipStart + clipDuration - deltaEndSec;
 
+          // Clamp left edge: don't allow start < 0
+          if (newStart < 0) {
+            const clampLeftPx = -clipStart * pxPerSecond;
+            x = (parseFloat(event.target.dataset.x) || 0) + clampLeftPx;
+            leftDeltaRef.current -= event.deltaRect.left - clampLeftPx;
+            event.target.style.width = `${
+              event.rect.width - (event.deltaRect.left - clampLeftPx)
+            }px`;
+            event.target.style.transform = `translate(${x}px, 0px)`;
+            Object.assign(event.target.dataset, { x, y });
+            if (onResizeMove) {
+              onResizeMove(clampLeftPx, rightDeltaRef.current);
+            }
+            return;
+          }
+
+          // Clamp right edge: don't allow end < start + minDuration
+          const minDuration = 0.1; // seconds
+          const minWidthPx = minDuration * pxPerSecond;
+          if (newEnd - newStart < minDuration) {
+            const clampRightPx =
+              (newEnd - minDuration - newStart) * pxPerSecond; // This will be negative, clamp to min width
+            rightDeltaRef.current -= event.deltaRect.right - clampRightPx;
+            event.target.style.width = `${
+              event.rect.width - (event.deltaRect.right - clampRightPx)
+            }px`;
+            event.target.style.transform = `translate(${x}px, 0px)`;
+            Object.assign(event.target.dataset, { x, y });
+            if (onResizeMove) {
+              onResizeMove(leftDeltaRef.current, clampRightPx);
+            }
+            return;
+          }
+
+          // Normal resize logic
+          event.target.style.width = `${event.rect.width}px`;
+          event.target.style.transform = `translate(${x}px, 0px)`;
           Object.assign(event.target.dataset, { x, y });
+          if (onResizeMove) {
+            onResizeMove(leftDeltaRef.current, rightDeltaRef.current);
+          }
         },
+
         end(event) {
           if (onResizeEnd) {
             onResizeEnd(leftDeltaRef.current, rightDeltaRef.current);
@@ -92,7 +139,14 @@ export default function ClipBlock({
       drag?.unset();
       resize?.unset();
     };
-  }, [parentWidth, onDragMove, onDragEnd, onResizeEnd]);
+  }, [parentWidth, onDragMove, onDragEnd, onResizeMove, onResizeEnd]);
+
+  useEffect(() => {
+    if (blockRef.current) {
+      blockRef.current.style.transform = `translateX(${initialX}px)`;
+      blockRef.current.setAttribute("data-x", String(initialX));
+    }
+  }, [initialX]);
 
   return (
     <div
