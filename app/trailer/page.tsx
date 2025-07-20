@@ -87,7 +87,7 @@ export default function Trailer() {
   }, [uploadLoading, processLoading, previewLoading]);
 
   const [title, setTitle] = useState("Trailer");
-  const [vibe, setVibe] = useState("");
+  const [genre, setGenre] = useState("");
   const [videoLength, setVideoLength] = useState(30);
   const [fileType, setFileType] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<vid[]>([]);
@@ -515,15 +515,25 @@ export default function Trailer() {
                       />
                     </div>
 
-                    {/* Vibe */}
-                    <div className="flex flex-col gap-y-2">
-                      <Label htmlFor="vibe">Vibe</Label>
-                      <Input
-                        id="vibe"
-                        name="vibe"
-                        placeholder="how should the audience feel..."
-                        required
-                      />
+                    {/* Genre */}
+                    <div className="flex flex-col gap-y-2 w-full">
+                      <Label htmlFor="genre">Music Genre</Label>
+                      <Select name="genre" required>
+                        <SelectTrigger id="genre" className="w-full">
+                          <SelectValue placeholder="Select genre" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="classical">Classical</SelectItem>
+                            <SelectItem value="electronic">
+                              Electronic
+                            </SelectItem>
+                            <SelectItem value="hip hop">Hip Hop</SelectItem>
+                            <SelectItem value="meme">Meme</SelectItem>
+                            <SelectItem value="pop">Pop</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* Maximum Video Length */}
