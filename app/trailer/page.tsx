@@ -29,6 +29,7 @@ import OrderList from "@/components/ui/orderlist";
 import Loading from "@/components/ui/loading";
 import Uploader from "@/components/ui/uploader";
 import ClipBlock from "@/components/ui/clipblock";
+import { useLayoutEffect } from "react";
 
 import { orderFilesByPosition } from "@/lib/utils";
 import axios from "axios";
@@ -58,8 +59,6 @@ interface audio {
   timelineStart: number;
   file: File;
 }
-
-interface video {}
 
 export default function Trailer() {
   const loadingStates = {
@@ -94,24 +93,67 @@ export default function Trailer() {
   const parentRef = useRef<HTMLDivElement>(null);
   const [parentWidth, setParentWidth] = useState(0);
 
-  const [audioFiles, setAudioFiles] = useState<audio[]>([]);
+  // Mock Data (delete later)
+  const mockVideoFiles: video[] = [
+    {
+      name: "Video 1",
+      start: 0, // clip trimmed start (seconds in video file)
+      end: 10, // clip trimmed end (seconds in video file)
+      timelineStart: 0, // position on timeline in seconds
+      file: new File([], "video1.mp4"),
+    },
+    // {
+    //   name: "Video 2",
+    //   start: 0,
+    //   end: 15,
+    //   timelineStart: 12,
+    //   file: new File([], "video2.mp4"),
+    // },
+  ];
+
+  const mockAudioFiles: audio[] = [
+    {
+      name: "Audio 1",
+      start: 0,
+      end: 10,
+      timelineStart: 0,
+      file: new File([], "audio1.mp3"),
+    },
+    // {
+    //   name: "Audio 2",
+    //   start: 2,
+    //   end: 6,
+    //   timelineStart: 14,
+    //   file: new File([], "audio2.mp3"),
+    // },
+  ];
+
+  const [audioFiles, setAudioFiles] = useState<audio[]>(mockAudioFiles);
   const [videoFiles, setVideoFiles] = useState<video[]>([]);
 
-  function handleClipDrag(
+  function handleClipDragEnd(
     type: "audio" | "video",
     index: number,
-    newX: number
+    finalX: number
   ) {
     if (type === "audio") {
       setAudioFiles((prev) => {
         const updated = [...prev];
-        updated[index] = { ...updated[index], timelineStart: newX };
+        updated[index] = {
+          ...updated[index],
+          timelineStart: (finalX * videoLength) / parentWidth,
+        };
+        console.log((finalX * videoLength) / parentWidth);
+
         return updated;
       });
     } else {
       setVideoFiles((prev) => {
         const updated = [...prev];
-        updated[index] = { ...updated[index], timelineStart: newX };
+        updated[index] = {
+          ...updated[index],
+          timelineStart: (finalX * videoLength) / parentWidth,
+        };
         return updated;
       });
     }
@@ -158,25 +200,27 @@ export default function Trailer() {
     }
   }
 
-  useEffect(() => {
-    if (parentRef.current) {
+  useLayoutEffect(() => {
+    if (
+      uploadLoading === loadingStates.DONE &&
+      processLoading === loadingStates.NOT_STARTED &&
+      parentRef.current
+    ) {
       const rect = parentRef.current.getBoundingClientRect();
       setParentWidth(rect.width);
-    }
 
-    const resizeObserver = new ResizeObserver(() => {
-      if (parentRef.current) {
-        const rect = parentRef.current.getBoundingClientRect();
-        setParentWidth(rect.width);
-      }
-    });
+      const resizeObserver = new ResizeObserver(() => {
+        if (parentRef.current) {
+          const rect = parentRef.current.getBoundingClientRect();
+          setParentWidth(rect.width);
+        }
+      });
 
-    if (parentRef.current) {
       resizeObserver.observe(parentRef.current);
-    }
 
-    return () => resizeObserver.disconnect();
-  }, []);
+      return () => resizeObserver.disconnect();
+    }
+  }, [uploadLoading, processLoading]);
 
   const sendUploadedVideos = async () => {
     // sort for each
@@ -201,7 +245,6 @@ export default function Trailer() {
           },
         }
       );
-      console.log("Testing");
       console.log(res.data.message);
     } catch (err) {
       console.error("Axios POST error:", err);
@@ -342,7 +385,7 @@ export default function Trailer() {
                       onClick={() => {
                         setUploadLoading(loadingStates.LOADING); // actual value
                         setUploadLoading(loadingStates.DONE); // temporary
-                        sendUploadedVideos();
+                        // sendUploadedVideos(); // TEMPORARY
                       }}
                     >
                       Submit
@@ -364,28 +407,80 @@ export default function Trailer() {
                   <CardContent className="flex flex-col justify-center px-8 gap-x-6">
                     {/* Repeat this for as many audio clips there are */}
 
-                    <div className="relative w-full h-16 flex flex-col gap-y-4">
+                    {/* <div className="relative w-full h-16 flex flex-col gap-y-4">
                       {videoFiles.map((videoItem, index) => {
+                        const clipDuration = videoItem.end - videoItem.start; // duration in seconds
+                        const blockWidthPx =
+                          (clipDuration / videoLength) * parentWidth; // Total pixels of block parent is pixels, videoLength is total timeline length
+                        const initialX =
+                          (videoItem.timelineStart / videoLength) * parentWidth; // calculate start time in pixels
+
                         return (
-                          <div className="w-full">
+                          <ClipBlock
+                            key={index}
+                            initialX={initialX}
+                            initialWidth={blockWidthPx}
+                            parentWidth={parentWidth}
+                            clipName={videoItem.name}
+                            isAudio={false}
+                            onDragMove={(newX) =>
+                              handleClipDrag("video", index, newX)
+                            }
+                            onResizeMove={(deltaLeftPx, deltaRightPx) =>
+                              handleClipResize(
+                                "video",
+                                index,
+                                deltaLeftPx,
+                                deltaRightPx,
+                                blockWidthPx,
+                                clipDuration
+                              )
+                            }
+                          ></ClipBlock>
+                        );
+                      })}
+                    </div> */}
+
+                    <div
+                      ref={parentRef}
+                      className="relative w-full h-16 bg-yellow-200"
+                    >
+                      {parentWidth > 0 &&
+                        audioFiles.map((audioItem, index) => {
+                          const clipDuration = audioItem.end - audioItem.start; // duration in seconds
+                          const blockWidthPx =
+                            (clipDuration / videoLength) * parentWidth; // Total pixels of block parent is pixels, videoLength is total timeline length
+                          const initialX =
+                            (audioItem.timelineStart / videoLength) *
+                            parentWidth; // calculate start time in pixels
+                          console.log("audioItem.end: ", audioItem.end);
+                          console.log("audioItem.start: ", audioItem.start);
+
+                          console.log("clipDuration:", clipDuration);
+                          console.log("blockWidthPx:", blockWidthPx);
+                          console.log("videoLength:", videoLength);
+                          console.log("initialX:", initialX);
+                          console.log("parentWidth:", parentWidth);
+
+                          // <div
+                          //   className="relative w-full h-16 flex flex-col gap-y-4"
+                          //   key={index}
+                          // >
+
+                          return (
                             <ClipBlock
                               key={index}
-                              initialX={videoItem.start}
-                              initialWidth={100}
+                              initialX={initialX}
+                              initialWidth={blockWidthPx} // Need to calculate using end - start then convert based on the parent size
                               parentWidth={parentWidth}
-                              clipName={videoItem.name}
-                              isAudio={false}
-                              //   onChange={(newX, newWidth) =>
-                              //     handleClipChange("video", index, newX, newWidth)
-                              //   }
-                              onDragMove={(newX) =>
-                                handleClipDrag("video", index, newX)
+                              clipName={audioItem.name}
+                              isAudio={true}
+                              onDragEnd={(finalX) =>
+                                handleClipDragEnd("audio", index, finalX)
                               }
-                              // blockWidthPx,
-                              // clipDuration
-                              onResizeMove={(deltaLeftPx, deltaRightPx) =>
+                              onResizeEnd={(deltaLeftPx, deltaRightPx) =>
                                 handleClipResize(
-                                  "video",
+                                  "audio",
                                   index,
                                   deltaLeftPx,
                                   deltaRightPx,
@@ -393,32 +488,10 @@ export default function Trailer() {
                                   clipDuration
                                 )
                               }
-                            />
-                          </div>
-                        );
-                      })}
+                            ></ClipBlock>
+                          );
+                        })}
                     </div>
-
-                    {audioFiles.map((audioItem, index) => {
-                      return (
-                        <div
-                          className="relative w-full h-16 flex flex-col gap-y-4"
-                          key={index}
-                        >
-                          {/* add blocks here in a vertical col format */}
-                          <ClipBlock
-                            initialX={audioItem.start}
-                            initialWidth={100} // Need to calculate using end - start then convert based on the parent size
-                            parentWidth={parentWidth}
-                            clipName={audioItem.name}
-                            isAudio={true}
-                            onChange={(newX, newWidth) =>
-                              handleClipChange("audio", index, newX, newWidth)
-                            }
-                          />
-                        </div>
-                      );
-                    })}
                   </CardContent>
                 </div>
               </Card>
