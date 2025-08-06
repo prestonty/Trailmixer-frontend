@@ -80,7 +80,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{
               duration: 0.3,
-              delay: index * 0.2,
+              delay: index * 0.1,
               ease: "easeOut",
             }}
             whileHover={{
@@ -93,7 +93,7 @@ export default function Home() {
             }}
             className="h-full"
           >
-            <Card className="bg-slate-800 border-slate-700 py-12 sm:py-16 md:py-20 h-full flex flex-col justify-between">
+            <Card className="bg-slate-800 border-slate-700 border-2 py-12 sm:py-16 md:py-20 h-full flex flex-col justify-between shadow-lg">
               <CardHeader className="text-white px-6 sm:px-8 md:px-12">
                 <CardTitle className="mb-4 text-xl sm:text-2xl">
                   {contentItem.title}
