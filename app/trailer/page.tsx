@@ -61,6 +61,8 @@ interface audio {
   file: File;
 }
 
+type UploadedItem = { file: File; position: number };
+
 export default function Trailer() {
   const searchParams = useSearchParams();
 
@@ -330,86 +332,158 @@ export default function Trailer() {
     }
   };
 
-  const sendUploadedVideos = async () => {
+  const sendUploadedVideos = async (
+    uploadedFiles: UploadedItem[]
+  ): Promise<{
+    finalVideoUrl: string;
+    processedFilename: string;
+    stitchedFilename: string;
+  }> => {
     try {
-      console.log("🚀 Starting video upload process...");
+      console.log("🚀 Starting video pipeline...");
 
-      // Sort and prepare files
-      const filesToOrder = uploadedFiles.map((item) => ({
-        file: item.file,
-        position: item.position,
+      // ---- 1) Upload ---------------------------------------------------------
+      const filesToOrder = uploadedFiles.map(({ file, position }) => ({
+        file,
+        position,
       }));
-
       const sortedFiles = orderFilesByPosition(filesToOrder);
+
       const formData = new FormData();
+      // Important: append the actual File instances in the final intended order
       sortedFiles.forEach((file) => {
-        formData.append("video_files", file);
+        formData.append("files", file, file.name);
       });
 
-      // Step 1: Upload videos
       console.log("📤 Step 1: Uploading videos...");
       const uploadRes = await axios.post(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/upload`,
-        formData,
+        formData
+        // headers: axios will set the multipart boundary automatically; no need to set Content-Type
+      );
+
+      // We’ll build the filenames list from the exact files we sent (ensures order)
+      const filenames = sortedFiles.map((f) => f.name);
+
+      // ---- 2) Stitch (or move if only one) -----------------------------------
+      console.log("🧵 Step 2: Stitching videos...");
+      const stitchRes = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/stitch`,
+        { filenames } // VideoStitchRequest: { filenames: string[] }
+      );
+
+      const stitchedFilename: string = stitchRes.data.filename; // final stitched (or moved) file name
+
+      // ---- 3) Process ---------------------------------------------------------
+      console.log("🎵 Step 3: Processing video with Twelve Labs + music...");
+      // Your backend made this a GET that expects query params (FastAPI will parse the Pydantic model from query)
+      const processRes = await axios.post(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/process`,
         {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
+          filename: stitchedFilename,
+          music_style: genre, // make sure this isn't undefined
+          num_sentiments: 2,
+          num_segments: 2,
+          desired_duration: videoLength,
         }
       );
 
-      const { job_id, music_file_paths } = uploadRes.data;
-      console.log("✅ Upload successful!");
-      console.log("   🆔 Job ID:", job_id);
+      const processedFilename: string = processRes.data.filename;
 
-      // Store data for later use
-      setJobId(job_id);
-
-      // Process music_file_paths for timeline display
-      if (music_file_paths) {
-        const processedAudioFiles: audio[] = Object.entries(
-          music_file_paths
-        ).map(([filepath, audioData]: [string, any]) => {
-          const filename =
-            filepath.split("/").pop() || filepath.split("\\").pop() || filepath;
-
-          return {
-            name: filename,
-            start: 0,
-            end: audioData.end || videoLength,
-            timelineStart: audioData.start,
-            file: new File([], filepath),
-          };
-        });
-
-        setAudioFiles(processedAudioFiles);
-        console.log(
-          "🎼 Processed audio files for timeline:",
-          processedAudioFiles
-        );
-      }
-
-      // Step 2: Crop video using AI-detected segments
-      console.log("✂️ Step 2: Cropping video using AI segments...");
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/crop?job_id=${job_id}`
-      );
-      console.log("✅ Video cropping completed!");
-
-      // Upload and cropping complete - show editor
+      // The backend mounts processed files at /processed
+      const finalVideoUrl = `${process.env.NEXT_PUBLIC_BACKEND_URL}/processed/${processedFilename}`;
+      console.log("✅ Done! Final video:", finalVideoUrl);
+      setPreviewLoading(loadingStates.DONE);
       setUploadLoading(loadingStates.DONE);
-      console.log("🎬 Ready for trailer editing!");
-    } catch (error) {
-      console.error("❌ Upload/crop process failed:", error);
-      const errorDetails =
-        (error as any)?.response?.data ||
-        (error as Error)?.message ||
-        "Unknown error";
-      console.log("Error details:", errorDetails);
-      // Reset loading state on error
-      setUploadLoading(loadingStates.NOT_STARTED);
+
+      return { finalVideoUrl, processedFilename, stitchedFilename };
+    } catch (err: any) {
+      // Helpful debug logs
+      console.error("❌ Video pipeline failed:", err?.response?.data ?? err);
+      throw err;
     }
   };
+
+  // const sendUploadedVideos = async () => {
+  //   try {
+  //     console.log("🚀 Starting video upload process...");
+
+  //     // Sort and prepare files
+  //     const filesToOrder = uploadedFiles.map((item) => ({
+  //       file: item.file,
+  //       position: item.position,
+  //     }));
+
+  //     const sortedFiles = orderFilesByPosition(filesToOrder);
+  //     const formData = new FormData();
+  //     sortedFiles.forEach((file) => {
+  //       formData.append("files", file);
+  //     });
+
+  //     // Step 1: Upload videos
+  //     console.log("📤 Step 1: Uploading videos...");
+  //     const uploadRes = await axios.post(
+  //       `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/upload`,
+  //       formData,
+  //       {
+  //         headers: {
+  //           "Content-Type": "multipart/form-data",
+  //         },
+  //       }
+  //     );
+
+  //     // const { job_id, music_file_paths } = uploadRes.data;
+  //     // console.log("✅ Upload successful!");
+  //     // console.log("   🆔 Job ID:", job_id);
+
+  //     // // Store data for later use
+  //     // setJobId(job_id);
+
+  //     // // Process music_file_paths for timeline display
+  //     // if (music_file_paths) {
+  //     //   const processedAudioFiles: audio[] = Object.entries(
+  //     //     music_file_paths
+  //     //   ).map(([filepath, audioData]: [string, any]) => {
+  //     //     const filename =
+  //     //       filepath.split("/").pop() || filepath.split("\\").pop() || filepath;
+
+  //     //     return {
+  //     //       name: filename,
+  //     //       start: 0,
+  //     //       end: audioData.end || videoLength,
+  //     //       timelineStart: audioData.start,
+  //     //       file: new File([], filepath),
+  //     //     };
+  //     //   });
+
+  //     //   setAudioFiles(processedAudioFiles);
+  //     //   console.log(
+  //     //     "🎼 Processed audio files for timeline:",
+  //     //     processedAudioFiles
+  //     //   );
+  //     // }
+
+  //     // Step 2: Crop video using AI-detected segments
+  //     // console.log("✂️ Step 2: Cropping video using AI segments...");
+  //     // await axios.post(
+  //     //   `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/video/crop?job_id=${job_id}`
+  //     // );
+  //     // console.log("✅ Video cropping completed!");
+
+  //     // Upload and cropping complete - show editor
+  //     setUploadLoading(loadingStates.DONE);
+  //     console.log("🎬 Ready for trailer editing!");
+  //   } catch (error) {
+  //     console.error("❌ Upload/crop process failed:", error);
+  //     const errorDetails =
+  //       (error as any)?.response?.data ||
+  //       (error as Error)?.message ||
+  //       "Unknown error";
+  //     console.log("Error details:", errorDetails);
+  //     // Reset loading state on error
+  //     setUploadLoading(loadingStates.NOT_STARTED);
+  //   }
+  // };
 
   // Fetch stitched video
   const confirmVideoEdit = async () => {
@@ -518,7 +592,12 @@ export default function Trailer() {
                     {/* Genre */}
                     <div className="flex flex-col gap-y-2 w-full">
                       <Label htmlFor="genre">Music Genre</Label>
-                      <Select name="genre" required>
+                      <Select
+                        name="genre"
+                        required
+                        value={genre}
+                        onValueChange={setGenre}
+                      >
                         <SelectTrigger id="genre" className="w-full">
                           <SelectValue placeholder="Select genre" />
                         </SelectTrigger>
@@ -544,6 +623,7 @@ export default function Trailer() {
                       <Input
                         id="videoLength"
                         name="videoLength"
+                        onChange={(e) => setVideoLength(Number(e.target.value))}
                         type="number"
                         placeholder="30"
                         defaultValue={30}
@@ -593,7 +673,7 @@ export default function Trailer() {
                       className="w-fit p-6 text-lg"
                       onClick={async () => {
                         setUploadLoading(loadingStates.LOADING);
-                        await sendUploadedVideos();
+                        await sendUploadedVideos(uploadedFiles);
                       }}
                       disabled={uploadedFiles.length === 0}
                     >
